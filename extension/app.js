@@ -707,6 +707,215 @@ const ICONS = {
    IN-MEMORY STORE FOR OPEN-TAB GROUPS
    ---------------------------------------------------------------- */
 let domainGroups = [];
+let currentView = 'tabs';
+let currentEmbedSource = 'tophub';
+let quickLinksState = {
+  dismissed: false,
+  collapsed: false,
+};
+
+const QUICK_LINKS_STORAGE_KEY = 'quickLinksUiState';
+const EMBED_SOURCES = [
+  {
+    key: 'tophub',
+    title: '今日热榜',
+    sourceUrl: 'https://tophub.today/',
+    iconUrl: 'https://tophub.today/favicon.ico',
+    offset: -320,
+    heavyMask: true,
+  },
+  {
+    key: 'baidu',
+    title: '百度热榜',
+    sourceUrl: 'https://top.baidu.com/board?tab=realtime',
+    iconUrl: 'https://www.baidu.com/favicon.ico',
+    offset: 0,
+    heavyMask: false,
+  },
+  {
+    key: 'weibo',
+    title: '微博',
+    sourceUrl: 'https://s.weibo.com/top/summary',
+    iconUrl: 'https://weibo.com/favicon.ico',
+    offset: 0,
+    heavyMask: false,
+  },
+];
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function getQuickLinks() {
+  if (typeof LOCAL_QUICK_LINKS !== 'undefined' && Array.isArray(LOCAL_QUICK_LINKS)) {
+    return LOCAL_QUICK_LINKS;
+  }
+  if (Array.isArray(globalThis.LOCAL_QUICK_LINKS)) return globalThis.LOCAL_QUICK_LINKS;
+  return [];
+}
+
+function getEmbedSource(key = currentEmbedSource) {
+  return EMBED_SOURCES.find(source => source.key === key) || EMBED_SOURCES[0];
+}
+
+function appendCacheBust(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set('__tabout', String(Date.now()));
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getDomainFavicon(url) {
+  try {
+    const parsed = new URL(url);
+    return `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`;
+  } catch {
+    return '';
+  }
+}
+
+async function loadQuickLinksState() {
+  try {
+    const { [QUICK_LINKS_STORAGE_KEY]: stored } = await chrome.storage.local.get(QUICK_LINKS_STORAGE_KEY);
+    quickLinksState = {
+      dismissed: false,
+      collapsed: Boolean(stored && stored.collapsed),
+    };
+  } catch {
+    quickLinksState = { dismissed: false, collapsed: false };
+  }
+}
+
+async function persistQuickLinksState() {
+  try {
+    await chrome.storage.local.set({
+      [QUICK_LINKS_STORAGE_KEY]: { collapsed: quickLinksState.collapsed },
+    });
+  } catch {}
+}
+
+function renderQuickLinks() {
+  const panel = document.getElementById('quickLinksPanel');
+  const body = document.getElementById('quickLinksBody');
+  const row = document.getElementById('quickLinksRow');
+  const collapseBtn = document.getElementById('quickLinksCollapseBtn');
+  if (!panel || !body || !row || !collapseBtn) return;
+
+  const links = getQuickLinks();
+  const shouldShow = currentView === 'tabs' && !quickLinksState.dismissed && links.length > 0;
+  panel.style.display = shouldShow ? 'block' : 'none';
+  if (!shouldShow) return;
+
+  body.classList.toggle('is-collapsed', quickLinksState.collapsed);
+  collapseBtn.setAttribute('aria-expanded', String(!quickLinksState.collapsed));
+
+  row.innerHTML = links.map(link => {
+    const icon = getDomainFavicon(link.url);
+    return `
+      <a class="quick-link-pill" href="${escapeHtml(link.url)}" target="_top" rel="noopener">
+        ${icon ? `<img src="${icon}" alt="" onerror="this.style.display='none'">` : ''}
+        <span>${escapeHtml(link.label || link.url)}</span>
+      </a>
+    `;
+  }).join('');
+}
+
+function renderHeaderNav() {
+  document.querySelectorAll('.header-nav-btn[data-view]').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.view === currentView);
+  });
+}
+
+function renderAppView() {
+  const dashboard = document.getElementById('dashboardColumns');
+  const newsView = document.getElementById('industryNewsView');
+  const devToolsView = document.getElementById('devToolsView');
+
+  if (dashboard) dashboard.style.display = currentView === 'tabs' ? '' : 'none';
+  if (newsView) newsView.style.display = currentView === 'industry-news' ? 'block' : 'none';
+  if (devToolsView) devToolsView.style.display = currentView === 'dev-tools' ? 'block' : 'none';
+
+  document.body.classList.toggle('view-tabs-home', currentView === 'tabs');
+  document.body.classList.toggle('view-industry-news', currentView === 'industry-news');
+  document.body.classList.toggle('view-dev-tools', currentView === 'dev-tools');
+
+  renderHeaderNav();
+  renderQuickLinks();
+}
+
+function renderEmbedToolbar() {
+  const toolbar = document.getElementById('newsEmbedToolbar');
+  if (!toolbar) return;
+
+  toolbar.innerHTML = EMBED_SOURCES.map(source => `
+    <button
+      class="news-source-chip ${source.key === currentEmbedSource ? 'is-active' : ''}"
+      data-action="switch-embed-source"
+      data-source="${source.key}"
+      type="button">
+      <img src="${source.iconUrl}" alt="" onerror="this.style.display='none'">
+      <span>${source.title}</span>
+    </button>
+  `).join('');
+}
+
+function renderIndustryNewsMeta() {
+  const meta = document.getElementById('industryNewsMeta');
+  if (!meta) return;
+  const source = getEmbedSource();
+  meta.textContent = `当前来源：${source.title}`;
+}
+
+function setIndustryNewsSource(sourceKey, { forceReload = false } = {}) {
+  const source = getEmbedSource(sourceKey);
+  currentEmbedSource = source.key;
+
+  const frame = document.getElementById('newsEmbedFrame');
+  const mask = document.getElementById('newsEmbedTopMask');
+  const fallback = document.getElementById('newsEmbedFallback');
+  const fallbackLink = document.getElementById('newsEmbedFallbackLink');
+  const clip = document.getElementById('newsEmbedFrameClip');
+
+  renderEmbedToolbar();
+  renderIndustryNewsMeta();
+
+  if (mask) mask.classList.toggle('is-heavy', Boolean(source.heavyMask));
+  if (fallback) fallback.style.display = 'none';
+  if (fallbackLink) fallbackLink.href = source.sourceUrl;
+  if (clip) clip.style.display = 'block';
+
+  if (!frame) return;
+
+  frame.style.transform = `translateY(${source.offset}px)`;
+
+  const nextSrc = forceReload ? appendCacheBust(source.sourceUrl) : source.sourceUrl;
+  if (frame.dataset.source !== source.sourceUrl || forceReload) {
+    frame.dataset.source = source.sourceUrl;
+    frame.src = nextSrc;
+  }
+}
+
+function setupIndustryNewsFrame() {
+  const frame = document.getElementById('newsEmbedFrame');
+  const fallback = document.getElementById('newsEmbedFallback');
+  const clip = document.getElementById('newsEmbedFrameClip');
+  const fallbackLink = document.getElementById('newsEmbedFallbackLink');
+  if (!frame || !fallback || !clip || !fallbackLink) return;
+
+  frame.addEventListener('error', () => {
+    const source = getEmbedSource();
+    clip.style.display = 'none';
+    fallback.style.display = 'flex';
+    fallbackLink.href = source.sourceUrl;
+  });
+}
 
 
 /* ----------------------------------------------------------------
@@ -1170,6 +1379,8 @@ async function renderStaticDashboard() {
 
 async function renderDashboard() {
   await renderStaticDashboard();
+  renderAppView();
+  setIndustryNewsSource(currentEmbedSource);
 }
 
 
@@ -1187,6 +1398,39 @@ document.addEventListener('click', async (e) => {
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  if (action === 'switch-view') {
+    currentView = actionEl.dataset.view || 'tabs';
+    renderAppView();
+    if (currentView === 'industry-news') {
+      setIndustryNewsSource(currentEmbedSource);
+    }
+    return;
+  }
+
+  if (action === 'toggle-quick-links') {
+    quickLinksState.collapsed = !quickLinksState.collapsed;
+    await persistQuickLinksState();
+    renderQuickLinks();
+    return;
+  }
+
+  if (action === 'dismiss-quick-links') {
+    quickLinksState.dismissed = true;
+    renderQuickLinks();
+    return;
+  }
+
+  if (action === 'switch-embed-source') {
+    const sourceKey = actionEl.dataset.source;
+    if (sourceKey) setIndustryNewsSource(sourceKey);
+    return;
+  }
+
+  if (action === 'refresh-industry-news') {
+    setIndustryNewsSource(currentEmbedSource, { forceReload: true });
+    return;
+  }
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
@@ -1479,4 +1723,10 @@ document.addEventListener('input', async (e) => {
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
-renderDashboard();
+async function initializeApp() {
+  await loadQuickLinksState();
+  setupIndustryNewsFrame();
+  await renderDashboard();
+}
+
+initializeApp();

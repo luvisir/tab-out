@@ -26,7 +26,68 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
+    <nav class="header-nav" aria-label="View switcher">
+      <button class="header-nav-btn is-active" data-action="switch-view" data-view="tabs">标签首页</button>
+      <button class="header-nav-btn" data-action="switch-view" data-view="industry-news">行业资讯</button>
+      <button class="header-nav-btn" data-action="switch-view" data-view="dev-tools">开发工具</button>
+    </nav>
   </header>
+
+  <section class="quick-links-panel" id="quickLinksPanel" style="display:none">
+    <div class="quick-links-header">
+      <div class="quick-links-heading">
+        <div class="quick-links-eyebrow">Quick Links</div>
+      </div>
+      <div class="quick-links-controls">
+        <button class="quick-links-control" id="quickLinksCollapseBtn" data-action="toggle-quick-links" type="button" aria-expanded="true" title="折叠">
+          <svg class="quick-links-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        <button class="quick-links-control" data-action="dismiss-quick-links" type="button" title="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="quick-links-body" id="quickLinksBody">
+      <div class="quick-links-row" id="quickLinksRow"></div>
+    </div>
+  </section>
+
+  <section class="industry-news-shell" id="industryNewsView" style="display:none">
+    <div class="news-meta-bar">
+      <div class="news-meta-copy" id="industryNewsMeta">当前来源：今日热榜</div>
+      <button class="news-refresh-btn" data-action="refresh-industry-news" type="button">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356m-4.992 4.992A9 9 0 1 0 8.11 19.89" />
+        </svg>
+        刷新
+      </button>
+    </div>
+
+    <div class="news-embed-frame-wrap">
+      <div class="news-embed-frame-clip" id="newsEmbedFrameClip">
+        <iframe class="news-embed-frame" id="newsEmbedFrame" title="Industry news" referrerpolicy="no-referrer"></iframe>
+      </div>
+      <div class="news-embed-top-mask" id="newsEmbedTopMask">
+        <div class="news-embed-toolbar" id="newsEmbedToolbar"></div>
+      </div>
+      <div class="news-embed-fallback" id="newsEmbedFallback" style="display:none">
+        <p>这个来源暂时无法嵌入，点下面直接打开。</p>
+        <a class="news-fallback-link" id="newsEmbedFallbackLink" href="#" target="_blank" rel="noopener">打开来源</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="dev-tools-shell" id="devToolsView" style="display:none">
+    <div class="dev-tools-card">
+      <div class="dev-tools-eyebrow">Dev tools</div>
+      <h2>开发工具</h2>
+      <p>这里先保留给下一批站点和工具导航，结构已经补回来了，后面我们可以继续往这里加内容。</p>
+    </div>
+  </section>
 
   <!-- ================================================================
        TAB OUT DUPES BANNER — appears when you have extra Tab Out tabs open
